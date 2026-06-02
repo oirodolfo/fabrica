@@ -1,0 +1,15 @@
+# Contributing Guide
+
+Run the full validation suite before opening a pull request:
+
+```bash
+pnpm install
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm docs:generate
+pnpm docs:build
+```
+
+Every public API should include TSDoc with examples so docs stay aligned with
+runtime behavior.

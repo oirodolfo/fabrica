@@ -1,0 +1,16 @@
+# Publishing Guide
+
+Fabrica uses Changesets for semantic versioning, changelog maintenance, GitHub
+releases, and npm publishing.
+
+## Create a release
+
+1. Add a changeset with `pnpm changeset`.
+2. Merge the changeset to `main`.
+3. The release workflow opens or updates a version PR.
+4. Merge the version PR to publish `@rodkisten/fabrica` to npm.
+
+## Required secrets
+
+- `NPM_TOKEN` for npm publishing.
+- `GITHUB_TOKEN` is provided automatically by GitHub Actions.

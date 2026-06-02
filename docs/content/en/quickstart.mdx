@@ -1,0 +1,24 @@
+# Quick Start
+
+Create immutable HTML and CSS templates with tagged template helpers.
+
+```ts
+import { css, html } from '@rodkisten/fabrica';
+
+const button = html`<button type="button">Save</button>`;
+const styles = css`button { font: inherit; }`;
+
+document.body.append(button.toTemplate().content.cloneNode(true));
+document.head.append(styles.toStyleElement());
+```
+
+`null` and `undefined` interpolations render as empty strings, which makes
+conditional fragments compact:
+
+```ts
+import { html } from '@rodkisten/fabrica';
+
+const label = undefined;
+const view = html`<span>${label}</span>`;
+console.log(view.source); // <span></span>
+```
