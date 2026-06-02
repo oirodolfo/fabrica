@@ -1,9 +1,16 @@
-# fabrica
+<div align="center"> 
+   <strong>fabrica</strong>
+   <hr>
+
+<img width="1774" height="887" alt="image" src="https://github.com/user-attachments/assets/ba6db246-77c9-4079-bfc9-161ba51a3d27" />
+
 
 [![CI](https://github.com/rodkisten/fabrica/actions/workflows/ci.yml/badge.svg)](https://github.com/rodkisten/fabrica/actions/workflows/ci.yml)
 
 A tiny typed HTML and CSS runtime foundation for TypeScript, published as
 `@rodkisten/fabrica`.
+
+</div>
 
 ## Install
 
