@@ -1,0 +1,93 @@
+# Extracted TSDoc Examples
+
+This page is generated from every `@example` block in public source comments.
+
+## CssTemplate
+
+From `css.ts`.
+
+```ts
+import { css } from '@rodkisten/fabrica';
+
+const theme = css`:root { color-scheme: dark; }`;
+document.head.append(theme.toStyleElement());
+```
+
+## CssOptions
+
+From `css.ts`.
+
+```ts
+import { css } from '@rodkisten/fabrica';
+
+const loggedCss = css.withOptions({ debug: true })`body { margin: 0; }`;
+console.log(loggedCss.kind);
+```
+
+## css
+
+From `css.ts`.
+
+```ts
+import { css } from '@rodkisten/fabrica';
+
+const fragment = css`body { margin: 0; }`;
+console.log(fragment.source);
+```
+
+## HtmlTemplate
+
+From `html.ts`.
+
+```ts
+import { html } from '@rodkisten/fabrica';
+
+const card = html`<article><h2>${'Hello'}</h2></article>`;
+document.body.append(card.toTemplate().content.cloneNode(true));
+```
+
+## HtmlOptions
+
+From `html.ts`.
+
+```ts
+import { html } from '@rodkisten/fabrica';
+
+const quiet = html.withOptions({ debug: false })`<p>No logs</p>`;
+console.log(quiet.source);
+```
+
+## html
+
+From `html.ts`.
+
+```ts
+import { html } from '@rodkisten/fabrica';
+
+const fragment = html`<p>Hello</p>`;
+console.log(fragment.source);
+```
+
+## TemplateValue
+
+From `template.ts`.
+
+```ts
+import { html } from '@rodkisten/fabrica';
+
+const visible = true;
+const view = html`<p>${visible ? 'Shown' : undefined}</p>`;
+console.log(view.toString());
+```
+
+## FabricaTemplate
+
+From `template.ts`.
+
+```ts
+import { css } from '@rodkisten/fabrica';
+
+const styles = css`.card { color: ${'rebeccapurple'}; }`;
+console.log(styles.kind);
+console.log(styles.toString());
+```

@@ -1,0 +1,23 @@
+# Fabrica
+
+Fabrica is a tiny typed runtime foundation for HTML and CSS template literals.
+It gives TypeScript packages a small, immutable representation for markup and
+styles without bringing a framework, compiler, or virtual DOM.
+
+## Why Fabrica?
+
+- **Typed primitives** for HTML and CSS templates.
+- **ESM and CJS builds** with source maps and declarations.
+- **DOM helpers** for browser-like runtimes.
+- **TSDoc-first documentation** with generated API and example pages.
+
+```ts
+import { css, html } from '@rodkisten/fabrica';
+
+const title = 'Fabrica';
+const view = html`<h1>${title}</h1>`;
+const styles = css`h1 { color: rebeccapurple; }`;
+
+console.log(view.source);
+console.log(styles.source);
+```
