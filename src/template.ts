@@ -1,107 +1,250 @@
-const TEMPLATE_PART_SEPARATOR = '';
-const DEBUG_PREFIX = '[fabrica]';
+import { ATTR_MARKER_PREFIX, ATTR_MARKER_SUFFIX, TEXT_MARKER_PREFIX } from "@/constants";
+import { debugState } from "@/debug";
+import type { CompiledTemplate, TemplatePart } from "@/types";
 
-/* ────────────────────────────────────────────────────────────────────────── *\
- * Shared runtime primitives
-\* ────────────────────────────────────────────────────────────────────────── */
+/** Template compilation cache keyed by the browser-owned TemplateStringsArray. */
+const templateCache = new WeakMap<TemplateStringsArray, CompiledTemplate>();
 
 /**
- * Values accepted by fabrica tagged template helpers.
+ * Gets a compiled template from cache or compiles a new one.
  *
- * @remarks
- * The runtime accepts the same broad value range JavaScript template literals
- * support while making `null` and `undefined` render as empty strings. This is
- * useful for conditional fragments without leaking implementation details into
- * generated HTML or CSS text.
+ * @param strings - Template strings.
+ * @returns Compiled template and static part metadata.
  *
  * @example
  * ```ts
- * import { html } from '@rodkisten/fabrica';
- *
- * const visible = true;
- * const view = html`<p>${visible ? 'Shown' : undefined}</p>`;
- * console.log(view.toString());
+ * const compiled = getCompiledTemplate(strings);
  * ```
  */
-export type TemplateValue = string | number | boolean | bigint | null | undefined;
+export function getCompiledTemplate(strings: TemplateStringsArray): CompiledTemplate {
+  const cached = templateCache.get(strings);
 
-/**
- * Immutable metadata returned by every fabrica tagged template helper.
- *
- * @remarks
- * `FabricaTemplate` keeps the original literal parts and interpolation values
- * for tooling while exposing a stable string representation for runtime use.
- * The object is frozen so consumers can safely cache and pass it across module
- * boundaries without accidental mutation.
- *
- * @example
- * ```ts
- * import { css } from '@rodkisten/fabrica';
- *
- * const styles = css`.card { color: ${'rebeccapurple'}; }`;
- * console.log(styles.kind);
- * console.log(styles.toString());
- * ```
- */
-export interface FabricaTemplate<TemplateKind extends string> {
-  /** The semantic kind of template represented by this object. */
-  readonly kind: TemplateKind;
-  /** The raw template literal string parts. */
-  readonly strings: readonly string[];
-  /** The original interpolation values passed to the tag. */
-  readonly values: readonly TemplateValue[];
-  /** The rendered template source with normalized interpolation values. */
-  readonly source: string;
-  /**
-   * Returns the rendered template source.
-   *
-   * @returns The immutable `source` string for this template.
-   *
-   * @example
-   * ```ts
-   * import { html } from '@rodkisten/fabrica';
-   *
-   * console.log(String(html`<strong>${'Ready'}</strong>`));
-   * ```
-   */
-  toString(): string;
-}
-
-interface CreateTemplateOptions<TemplateKind extends string> {
-  readonly debug: boolean;
-  readonly kind: TemplateKind;
-  readonly strings: TemplateStringsArray;
-  readonly values: readonly TemplateValue[];
-}
-
-export function createTemplate<TemplateKind extends string>({
-  debug,
-  kind,
-  strings,
-  values,
-}: CreateTemplateOptions<TemplateKind>): FabricaTemplate<TemplateKind> {
-  const source = joinTemplate(strings, values);
-  const template: FabricaTemplate<TemplateKind> = {
-    kind,
-    strings: Object.freeze([...strings]),
-    values: Object.freeze([...values]),
-    source,
-    toString() {
-      return source;
-    },
-  };
-
-  if (debug) {
-    console.debug(`${DEBUG_PREFIX} created ${kind} template`, { source });
+  if (cached) {
+    return cached;
   }
 
-  return Object.freeze(template);
+  const template = document.createElement("template");
+  template.innerHTML = buildTemplateSource(strings);
+
+  const parts = compileParts(template.content);
+  const compiled: CompiledTemplate = { template, parts };
+
+  templateCache.set(strings, compiled);
+  debugState.templates += 1;
+  debugState.parts += parts.length;
+
+  return compiled;
 }
 
-function joinTemplate(strings: TemplateStringsArray, values: readonly TemplateValue[]): string {
-  return strings.reduce((source, part, index) => {
-    const value = values[index];
-    const renderedValue = value === null || value === undefined ? TEMPLATE_PART_SEPARATOR : String(value);
-    return `${source}${part}${renderedValue}`;
-  }, TEMPLATE_PART_SEPARATOR);
+/**
+ * Builds template HTML with text and attribute markers.
+ *
+ * @param strings - Static template chunks.
+ * @returns HTML source with markers.
+ */
+export function buildTemplateSource(strings: TemplateStringsArray): string {
+  let source = "";
+
+  for (let index = 0; index < strings.length; index += 1) {
+    const chunk = strings[index] ?? "";
+    source += chunk;
+
+    if (index >= strings.length - 1) {
+      continue;
+    }
+
+    source += isAttributePosition(chunk)
+      ? `${ATTR_MARKER_PREFIX}${index}${ATTR_MARKER_SUFFIX}`
+      : `<!--${TEXT_MARKER_PREFIX}${index}-->`;
+  }
+
+  return source;
+}
+
+/**
+ * Detects if interpolation appears in an attribute assignment.
+ *
+ * @param chunk - Static chunk before interpolation.
+ * @returns Whether the next value belongs to an attribute.
+ */
+export function isAttributePosition(chunk: string): boolean {
+  return /(?:[.?@:a-zA-Z_][\w:.-]*)\s*=\s*(?:"[^"]*|'[^']*)?$/.test(chunk);
+}
+
+/**
+ * Compiles child and attribute parts from a template root.
+ *
+ * @param root - Template content root.
+ * @returns Template parts.
+ */
+function compileParts(root: DocumentFragment): TemplatePart[] {
+  const parts: TemplatePart[] = [];
+
+  compileChildParts(root, parts);
+  compileAttributeParts(root, parts);
+
+  return parts;
+}
+
+/**
+ * Compiles child comment markers.
+ *
+ * @param root - Template root.
+ * @param parts - Parts accumulator.
+ */
+function compileChildParts(root: DocumentFragment, parts: TemplatePart[]): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_COMMENT);
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    const value = node.nodeValue ?? "";
+
+    if (!value.startsWith(TEXT_MARKER_PREFIX)) {
+      continue;
+    }
+
+    parts.push({ type: "child", index: Number(value.slice(TEXT_MARKER_PREFIX.length)), path: getNodePath(root, node) });
+  }
+}
+
+/**
+ * Compiles attribute markers.
+ *
+ * @param root - Template root.
+ * @param parts - Parts accumulator.
+ */
+function compileAttributeParts(root: DocumentFragment, parts: TemplatePart[]): void {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+
+  while (walker.nextNode()) {
+    const element = walker.currentNode as Element;
+    const attributes = Array.from(element.attributes);
+
+    for (let index = 0; index < attributes.length; index += 1) {
+      const attribute = attributes[index];
+
+      if (!attribute) {
+        continue;
+      }
+
+      const markerIndex = getAttributeMarkerIndex(attribute.value);
+
+      if (markerIndex === -1) {
+        continue;
+      }
+
+      parts.push({ type: "attribute", index: markerIndex, path: getNodePath(root, element), name: attribute.name });
+      element.removeAttribute(attribute.name);
+    }
+  }
+}
+
+/**
+ * Reads a marker index from an attribute value.
+ *
+ * @param value - Attribute value.
+ * @returns Marker index or -1.
+ */
+function getAttributeMarkerIndex(value: string): number {
+  const start = value.indexOf(ATTR_MARKER_PREFIX);
+
+  if (start === -1) {
+    return -1;
+  }
+
+  return Number(value.slice(start + ATTR_MARKER_PREFIX.length).split(ATTR_MARKER_SUFFIX)[0]);
+}
+
+/**
+ * Builds a stable child-index path to a node.
+ *
+ * @param root - Root node.
+ * @param node - Target node.
+ * @returns Path from root to node.
+ */
+export function getNodePath(root: Node, node: Node): number[] {
+  const path: number[] = [];
+  let current: Node | null = node;
+
+  while (current && current !== root) {
+    const parentNode: Node | null = current.parentNode;
+
+    if (!parentNode) {
+      break;
+    }
+
+    path.push(indexOfChild(parentNode, current));
+    current = parentNode;
+  }
+
+  path.reverse();
+  return path;
+}
+
+/**
+ * Resolves a path inside a cloned fragment.
+ *
+ * @param root - Clone root.
+ * @param path - Previously compiled path.
+ * @returns Resolved node or null.
+ */
+export function resolvePath(root: Node, path: readonly number[]): Node | null {
+  let current: Node | null = root;
+
+  for (let index = 0; index < path.length; index += 1) {
+    const childIndex = path[index];
+
+    if (childIndex == null) {
+      return null;
+    }
+
+    current = current.childNodes[childIndex] ?? null;
+
+    if (!current) {
+      return null;
+    }
+  }
+
+  return current;
+}
+
+/**
+ * Sorts parts in reverse DOM order so replacements do not shift unresolved siblings.
+ *
+ * @param left - Left path.
+ * @param right - Right path.
+ * @returns Sort number.
+ */
+export function comparePathsReverse(left: readonly number[], right: readonly number[]): number {
+  const maxLength = Math.max(left.length, right.length);
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const leftValue = left[index] ?? -1;
+    const rightValue = right[index] ?? -1;
+
+    if (leftValue !== rightValue) {
+      return rightValue - leftValue;
+    }
+  }
+
+  return right.length - left.length;
+}
+
+/**
+ * Gets child index using sibling traversal instead of allocating arrays.
+ *
+ * @param parentNode - Parent node.
+ * @param child - Child node.
+ * @returns Child index.
+ */
+function indexOfChild(parentNode: Node, child: Node): number {
+  let index = 0;
+  let current: ChildNode | null = parentNode.firstChild;
+
+  while (current && current !== child) {
+    index += 1;
+    current = current.nextSibling;
+  }
+
+  return index;
 }
